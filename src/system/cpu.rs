@@ -3,7 +3,7 @@ pub mod instruction;
 pub mod cpu_tests;
 
 use crate::system::cpu::regfile::Regfile;
-use crate::system::cpu::instruction::{Instruction, ArithmeticArg};
+use crate::system::cpu::instruction::*;
 use crate::system::memory::Memory;
 pub struct CPU {
     regfile: Regfile,
@@ -61,10 +61,19 @@ impl CPU {
                         _ => 0,
                     }
                 };
-            match instruction.op {
-                _ => {}
+                match instruction.op {
+                    Opcode::INC => { self.increment(memory, target) },
+                    Opcode::DEC => { self.decrement(memory, target) },
+                    _ => {}
                 }
-            self.pc_add(1);
+                self.pc_add(1);
+            }
+            Unary16(target) => {
+                match instruction.op {
+                    Opcode::INC => { self.increment16(target) },
+                    Opcode::DEC => { self.decrement16(target) },
+                    _ => {}
+                }
             }
             Misc => {
                 match instruction.op {
@@ -82,6 +91,165 @@ impl CPU {
         self.pc = new_val;
     }
 
+    fn increment16(&mut self, target: Word16) {
+        // no flags set
+        match target {
+            Word16::BC => {
+                let val = self.regfile.get_bc();
+                self.regfile.set_bc(val.wrapping_add(1));
+            }
+            Word16::DE => {
+                let val = self.regfile.get_de();
+                self.regfile.set_de(val.wrapping_add(1));
+            }
+            Word16::HL => {
+                let val = self.regfile.get_hl();
+                self.regfile.set_hl(val.wrapping_add(1));
+            }
+            Word16::SP => {
+                let val = self.sp.wrapping_add(1);
+                self.sp = val;
+            }
+        }
+    }
+
+    fn decrement16(&mut self, target: Word16) {
+        // no flags set
+        match target {
+            Word16::BC => {
+                let val = self.regfile.get_bc();
+                self.regfile.set_bc(val.wrapping_sub(1));
+            }
+            Word16::DE => {
+                let val = self.regfile.get_de();
+                self.regfile.set_de(val.wrapping_sub(1));
+            }
+            Word16::HL => {
+                let val = self.regfile.get_hl();
+                self.regfile.set_hl(val.wrapping_sub(1));
+            }
+            Word16::SP => {
+                let val = self.sp.wrapping_sub(1);
+                self.sp = val;
+            }
+        }
+    }
+
+    fn increment(&mut self, memory: &mut Memory, reg: ArithmeticArg) {
+        match reg {
+            ArithmeticArg::A => { 
+                self.regfile.half_add(self.regfile.r_a, 1);
+                let val = self.regfile.r_a.wrapping_add(1);
+                self.regfile.r_a = val;
+                self.regfile.set_zero(val == 0);
+            }
+            ArithmeticArg::B => {
+                self.regfile.half_add(self.regfile.r_b, 1); 
+                let val = self.regfile.r_b.wrapping_add(1);
+                self.regfile.r_b = val;
+                self.regfile.set_zero(val == 0);
+            }
+            ArithmeticArg::C => { 
+                self.regfile.half_add(self.regfile.r_c, 1);
+                let val = self.regfile.r_c.wrapping_add(1);
+                self.regfile.r_c = val;
+                self.regfile.set_zero(val == 0);
+            }
+            ArithmeticArg::D => { 
+                self.regfile.half_add(self.regfile.r_d, 1);
+                let val = self.regfile.r_d.wrapping_add(1);
+                self.regfile.r_d = val;
+                self.regfile.set_zero(val == 0);
+            }
+            ArithmeticArg::E => { 
+                self.regfile.half_add(self.regfile.r_e, 1);
+                let val = self.regfile.r_e.wrapping_add(1);
+                self.regfile.r_e = val;
+                self.regfile.set_zero(val == 0);
+            }
+            ArithmeticArg::H => { 
+                self.regfile.half_add(self.regfile.r_h, 1);
+                let val = self.regfile.r_h.wrapping_add(1);
+                self.regfile.r_h = val;
+                self.regfile.set_zero(val == 0);
+            }
+            ArithmeticArg::L => { 
+                self.regfile.half_add(self.regfile.r_l, 1);
+                let val = self.regfile.r_l.wrapping_add(1);
+                self.regfile.r_l = val;
+                self.regfile.set_zero(val == 0);
+            }
+            ArithmeticArg::HL => {
+                let addr = self.regfile.get_hl();
+                let memory_val = memory.read_byte(addr);
+                self.regfile.half_add(memory_val, 1);
+                let inc_val = memory_val.wrapping_add(1);
+                memory.write_byte(addr, inc_val);
+                self.regfile.set_zero(inc_val == 0);
+            }
+            _ => {}
+        }
+        self.regfile.set_sub(false);
+        // carry flag left unchanged
+    }
+
+    fn decrement(&mut self, memory: &mut Memory, reg: ArithmeticArg) {
+        match reg {
+            ArithmeticArg::A => { 
+                self.regfile.half_sub(self.regfile.r_a, 1);
+                let val = self.regfile.r_a.wrapping_sub(1);
+                self.regfile.r_a = val;
+                self.regfile.set_zero(val == 0);
+            }
+            ArithmeticArg::B => {
+                self.regfile.half_sub(self.regfile.r_b, 1); 
+                let val = self.regfile.r_b.wrapping_sub(1);
+                self.regfile.r_b = val;
+                self.regfile.set_zero(val == 0);
+            }
+            ArithmeticArg::C => { 
+                self.regfile.half_sub(self.regfile.r_c, 1);
+                let val = self.regfile.r_c.wrapping_sub(1);
+                self.regfile.r_c = val;
+                self.regfile.set_zero(val == 0);
+            }
+            ArithmeticArg::D => { 
+                self.regfile.half_sub(self.regfile.r_d, 1);
+                let val = self.regfile.r_d.wrapping_sub(1);
+                self.regfile.r_d = val;
+                self.regfile.set_zero(val == 0);
+            }
+            ArithmeticArg::E => { 
+                self.regfile.half_sub(self.regfile.r_e, 1);
+                let val = self.regfile.r_e.wrapping_sub(1);
+                self.regfile.r_e = val;
+                self.regfile.set_zero(val == 0);
+            }
+            ArithmeticArg::H => { 
+                self.regfile.half_sub(self.regfile.r_h, 1);
+                let val = self.regfile.r_h.wrapping_sub(1);
+                self.regfile.r_h = val;
+                self.regfile.set_zero(val == 0);
+            }
+            ArithmeticArg::L => { 
+                self.regfile.half_sub(self.regfile.r_l, 1);
+                let val = self.regfile.r_l.wrapping_sub(1);
+                self.regfile.r_l = val;
+                self.regfile.set_zero(val == 0);
+            }
+            ArithmeticArg::HL => {
+                let addr = self.regfile.get_hl();
+                let memory_val = memory.read_byte(addr);
+                self.regfile.half_sub(memory_val, 1);
+                let dec_val = memory_val.wrapping_sub(1);
+                memory.write_byte(addr, dec_val);
+                self.regfile.set_zero(dec_val == 0);
+            }
+            _ => {}
+        }
+        self.regfile.set_sub(true);
+        // carry flag left unchanged
+    }
 
 }
 

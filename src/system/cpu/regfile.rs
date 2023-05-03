@@ -49,23 +49,23 @@ impl Regfile {
         combine_two_u8!(self.r_h, self.r_l)
     }
 
-    fn set_af(&mut self, val: u16) {
+    pub fn set_af(&mut self, val: u16) {
         self.r_a = ((val & 0xFF00) >> 8) as u8;
         self.r_f = (val & 0xF0) as u8; //lowest 4 bits discarded
     }
 
-    fn set_bc(&mut self, val: u16) {
+    pub fn set_bc(&mut self, val: u16) {
         self.r_b = ((val & 0xFF00) >> 8) as u8;
         self.r_c = (val & 0xFF) as u8;
     }
 
-    fn set_de(&mut self, val: u16) {
+    pub fn set_de(&mut self, val: u16) {
         // println!("Writing: {0}", val);
         self.r_d = ((val & 0xFF00) >> 8) as u8;
         self.r_e = (val & 0xFF) as u8;
     }
 
-    fn set_hl(&mut self, val: u16) {
+    pub fn set_hl(&mut self, val: u16) {
         self.r_h = ((val & 0xFF00) >> 8) as u8;
         self.r_l = (val & 0xFF) as u8;
     }
@@ -77,7 +77,7 @@ impl Regfile {
         if (self.r_f & 0x80) > 0 { true } else { false }
     }
 
-    fn set_zero(&mut self, val: bool) {
+    pub fn set_zero(&mut self, val: bool) {
         if val { self.r_f = self.r_f | 0x80 }
         else { self.r_f = self.r_f & 0x7F }
     }
@@ -86,7 +86,7 @@ impl Regfile {
         if (self.r_f & 0x40) > 0 { true } else { false }
     }
 
-    fn set_sub(&mut self, val: bool) {
+    pub fn set_sub(&mut self, val: bool) {
         if val { self.r_f = self.r_f | 0x40 }
         else { self.r_f = self.r_f & 0xBF }
     }
@@ -95,7 +95,7 @@ impl Regfile {
         if (self.r_f & 0x20) > 0 { true } else { false }
     }
 
-    fn set_half_carry(&mut self, val: bool) {
+    pub fn set_half_carry(&mut self, val: bool) {
         if val { self.r_f = self.r_f | 0x20 }
         else { self.r_f = self.r_f & 0xDF }
     }
@@ -104,13 +104,25 @@ impl Regfile {
         if (self.r_f & 0x10) > 0 { true } else { false }
     }
 
-    fn set_carry(&mut self, val: bool) {
+    pub fn set_carry(&mut self, val: bool) {
         if val { self.r_f = self.r_f | 0x10 }
         else { self.r_f = self.r_f & 0xEF }
     }
 
-    fn toggle_carry(&mut self) {
+    pub fn toggle_carry(&mut self) {
         let val = !self.get_carry();
         self.set_carry(val);
+    }
+
+    pub fn half_add(&mut self, a: u8, b: u8) {
+        let flag = (a & 0xF) + (b & 0xF) > 0xF;
+        //let flag = (((a & 0xF) + (b & 0xF)) & 0x10) == 0x10;
+        self.set_half_carry(flag)
+    }
+
+    pub fn half_sub(&mut self, a: u8, b: u8) {
+        //TODO: Check if correct :)
+        let flag = (a & 0xF) < (b & 0xF);
+        self.set_half_carry(flag);
     }
 }
