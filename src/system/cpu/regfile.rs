@@ -115,14 +115,15 @@ impl Regfile {
     }
 
     pub fn half_add(&mut self, a: u8, b: u8) {
-        let flag = (a & 0xF) + (b & 0xF) > 0xF;
-        //let flag = (((a & 0xF) + (b & 0xF)) & 0x10) == 0x10;
+        //let flag = (a & 0xF) + (b & 0xF) > 0xF;
+        let flag = (((a & 0xF) + (b & 0xF)) & 0x10) == 0x10;
         self.set_half_carry(flag)
     }
 
     pub fn half_sub(&mut self, a: u8, b: u8) {
         //TODO: Check if correct :)
         let flag = (a & 0xF) < (b & 0xF);
+        //let flag = (((a & 0xF).wrapping_sub(b & 0xF)) & 0x10) == 0x10;
         self.set_half_carry(flag);
     }
 }

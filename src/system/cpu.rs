@@ -64,6 +64,24 @@ impl CPU {
                 match instruction.op {
                     Opcode::INC => { self.increment(memory, target) },
                     Opcode::DEC => { self.decrement(memory, target) },
+                    Opcode::ADD => { self.add8(val) },
+                    Opcode::SUB => { self.sub8(val, false) },
+                    Opcode::ADC => { 
+                                    if self.regfile.get_carry() {
+                                        self.add8(1)
+                                    }
+                                    self.add8(val)
+                                },
+                    Opcode::SBC => { 
+                                    if self.regfile.get_carry() {
+                                        self.sub8(1, false)
+                                    }
+                                    self.sub8(val, false)
+                                },
+                    Opcode::AND => { self.and8(val) },
+                    Opcode::XOR => { self.xor8(val) },
+                    Opcode::OR => { self.or8(val) },
+                    Opcode::CP => { self.sub8(val, true)},
                     _ => {}
                 }
                 self.pc_add(1);
@@ -89,6 +107,48 @@ impl CPU {
     fn pc_add(&mut self, val: u16) {
         let new_val = self.pc.wrapping_add(val);
         self.pc = new_val;
+    }
+
+    fn add8(&mut self, val: u8) {
+        let (new_val, overflow) = self.regfile.r_a.overflowing_add(val);
+        self.regfile.half_add(self.regfile.r_a, val);
+        self.regfile.set_zero(new_val == 0);
+        self.regfile.set_sub(false);
+        self.regfile.set_carry(overflow);
+        self.regfile.r_a = new_val;
+    }
+
+    fn sub8(&mut self, val: u8, compare: bool) {
+        let (new_val, overflow) = self.regfile.r_a.overflowing_sub(val);
+        self.regfile.half_sub(self.regfile.r_a, val);
+        self.regfile.set_zero(new_val == 0);
+        self.regfile.set_sub(true);
+        self.regfile.set_carry(overflow);
+        if !compare { self.regfile.r_a = new_val; }
+    }
+
+    fn and8(&mut self, val: u8) {
+        self.regfile.r_a &= val;
+        self.regfile.set_zero(self.regfile.r_a == 0);
+        self.regfile.set_sub(false);
+        self.regfile.set_half_carry(true);
+        self.regfile.set_carry(false);
+    }
+
+    fn or8(&mut self, val: u8) {
+        self.regfile.r_a |= val;
+        self.regfile.set_zero(self.regfile.r_a == 0);
+        self.regfile.set_sub(false);
+        self.regfile.set_half_carry(false);
+        self.regfile.set_carry(false);
+    }
+
+    fn xor8(&mut self, val: u8) {
+        self.regfile.r_a ^= val;
+        self.regfile.set_zero(self.regfile.r_a == 0);
+        self.regfile.set_sub(false);
+        self.regfile.set_half_carry(false);
+        self.regfile.set_carry(false);
     }
 
     fn increment16(&mut self, target: Word16) {
