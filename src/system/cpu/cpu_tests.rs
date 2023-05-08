@@ -267,4 +267,139 @@ mod cpu_tests {
 
         assert_eq!(cpu.regfile, regfile);
     }
+
+    // Load Opcodes
+    #[test]
+    fn LOAD_0x02() {
+        // LOAD (BC),A
+        // 1 8
+        // - - - -
+        // Memory address at (BC) is target, A is source
+        let mut cpu = CPU::new();
+        let mut memory = Memory::new();
+        let mut regfile = Regfile::new();
+        memory.write_byte(0, 0x02);
+
+        cpu.regfile.set_bc(0xF);
+        regfile.set_bc(0xF);
+        cpu.regfile.r_a = 7;
+        regfile.r_a = 7;
+
+        cpu.run(&mut memory);
+        assert_eq!(cpu.regfile, regfile);
+        assert_eq!(7, memory.read_byte(0xF));
+    }
+
+    #[test]
+    fn LOAD_0x22() {
+        // LOAD (HL+),A
+        // 1 8
+        // - - - -
+        // Memory address at (HL) is target, A is source
+        let mut cpu = CPU::new();
+        let mut memory = Memory::new();
+        let mut regfile = Regfile::new();
+        memory.write_byte(0, 0x22);
+
+        cpu.regfile.set_hl(0x0F);
+        regfile.set_hl(0x10);
+        cpu.regfile.r_a = 7;
+        regfile.r_a = 7;
+
+        cpu.run(&mut memory);
+        assert_eq!(cpu.regfile, regfile);
+        assert_eq!(7, memory.read_byte(0xF));
+    }
+
+     // Rotate Opcodes
+     #[test]
+     fn RLCA_0x07() {
+        // RLCA
+        // 1 4
+        // 0 0 0 C
+        let mut cpu = CPU::new();
+        let mut memory = Memory::new();
+        let mut regfile = Regfile::new();
+        memory.write_byte(0, 0x07);
+
+        cpu.regfile.r_a = 0x85;
+        regfile.r_a = 0x0B;
+        regfile.set_carry(true);
+        cpu.run(&mut memory);
+        assert_eq!(cpu.regfile, regfile);
+     }
+
+     #[test]
+     fn CB_RLC_0x00() {
+        let mut cpu = CPU::new();
+        let mut memory = Memory::new();
+        let mut regfile = Regfile::new();
+        memory.write_byte(0, 0xCB);
+        memory.write_byte(1, 0x00);
+
+        cpu.regfile.r_b = 0x85;
+        regfile.r_b = 0x0B;
+        regfile.set_carry(true);
+        cpu.run(&mut memory);
+        assert_eq!(cpu.regfile, regfile);
+     }
+
+     #[test]
+     fn RRCA_0x0F() {
+        let mut cpu = CPU::new();
+        let mut memory = Memory::new();
+        let mut regfile = Regfile::new();
+
+        memory.write_byte(0, 0x0F);
+
+        cpu.regfile.r_a = 0x3B;
+        regfile.r_a = 0x9D;
+        regfile.set_carry(true);
+
+        cpu.run(&mut memory);
+        assert_eq!(cpu.regfile, regfile);
+
+     }
+
+     #[test]
+     fn CB_RR_0x1E() {
+        let mut cpu = CPU::new();
+        let mut memory = Memory::new();
+        let mut regfile = Regfile::new();
+        memory.write_byte(0, 0xCB);
+        memory.write_byte(1, 0x1E);
+
+        memory.write_byte(0x07, 0x81);
+        cpu.regfile.set_hl(0x07);
+        regfile.set_hl(0x07);
+        regfile.set_carry(true);
+
+        cpu.run(&mut memory);
+        assert_eq!(cpu.regfile, regfile);
+        assert_eq!(0x40, memory.read_byte(0x07));
+     }
+
+    // Stack Opcodes
+    #[test]
+    fn PUSH_POP_BC_0xC5_0xD1() {
+        let mut cpu = CPU::new();
+        let mut memory = Memory::new();
+        let mut regfile = Regfile::new();
+        memory.write_byte(0, 0xC5);
+        memory.write_byte(1, 0xD1);
+
+        cpu.regfile.set_bc(0xABCD);
+        regfile.set_bc(0xABCD);
+
+        cpu.run(&mut memory); // PUSH BC
+        assert_eq!(cpu.regfile, regfile);
+        assert_eq!(cpu.sp, 0xFFFC); // should be decremented by 2
+        assert_eq!(0xAB, memory.read_byte(0xFFFD));
+        assert_eq!(0xCD, memory.read_byte(0xFFFC));
+
+        regfile.set_de(0xABCD);
+        cpu.run(&mut memory); // POP DE
+        assert_eq!(cpu.regfile, regfile);
+        assert_eq!(cpu.sp, 0xFFFE);
+    }
 }

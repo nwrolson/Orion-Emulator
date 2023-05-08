@@ -1,8 +1,9 @@
+use std::fmt;
 /// Eight 8-Bit Registers
 /// A is accumulator, F is Flag Register
 /// Can also be accessed as four 16-bit combined registers,
 /// AF, BC, DE, HL
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq)]
 pub struct Regfile {
     pub r_a: u8,
     pub r_b: u8,
@@ -18,6 +19,16 @@ macro_rules! combine_two_u8 {
     ($first:expr, $second:expr) => {
         (($first as u16) << 8) | ($second as u16)
     };
+}
+
+impl fmt::Debug for Regfile {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Write strictly the first element into the supplied output
+        // stream 'f'. Returns 'fmt::Result' which indicates whether the
+        // operation succeeded or failed. Note that 'write!' uses syntax which
+        // is very similar to 'println!'.
+        write!(f, "A:0x{:02X?}, B:0x{:02X?}, C:0x{:02X?}, D:0x{:02X?}, E:0x{:02X?}, F:0x{:02X?}, H:0x{:02X?}, L:0x{:02X?}", self.r_a, self.r_b, self.r_c, self.r_d, self.r_e, self.r_f, self.r_h, self.r_l)
+    }
 }
 
 impl Regfile {
