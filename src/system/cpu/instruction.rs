@@ -51,6 +51,7 @@ pub enum Opcode {
     SET,
     DI,
     EI,
+    NULL // for debugging purposes
 }
 
 #[derive(Debug)]
@@ -72,7 +73,8 @@ pub enum InstructionType {
     Add16(Word16),
     AddSP,
     Rotate(Word8),
-    Bit(Word8, u8)
+    Bit(Word8, u8),
+    Unsupported
 }
 
 #[derive(Debug)]
@@ -116,7 +118,7 @@ pub enum JumpCond {
 
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Opcode: {:?}\n", self.op);
+        write!(f, "Opcode: {:?}\n", self.op)?;
         write!(f, "Instruction Type: {:?}", self.instr_type)
     }
 }
@@ -1334,9 +1336,9 @@ impl Instruction {
                     cycle_len: 4
                 },
              _ => Instruction { 
-                    op: Opcode::NOP, 
-                    instr_type: InstructionType::Misc,
-                    cycle_len: 1 
+                    op: Opcode::NULL, 
+                    instr_type: InstructionType::Unsupported,
+                    cycle_len: 0 
                 },
         }
     }

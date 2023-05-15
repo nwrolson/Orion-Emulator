@@ -453,11 +453,34 @@ fn JR_0x30() {
 }
 
 #[test]
-fn CALL_0xCC() {
+fn CALL_RETURN_0xCC_0xC8() {
     let mut cpu = CPU::new();
     let mut memory = Memory::new();
-    memory.write_byte(0, 0xCC);
+    memory.write_byte(0, 0xCC); // CALL Z
+    memory.write_byte(1, 0xAB);
+    memory.write_byte(2, 0xCD);
+    memory.write_byte(0xABCD, 0xC8);
 
-    cpu.run(&mut memory);
-    assert_eq!(1, 0);
+    cpu.regfile.set_zero(false);
+
+    cpu.run(&mut memory); // CALL Z, zero is false
+    assert_eq!(cpu.pc, 0x3);
+    assert_eq!(cpu.sp, 0xFFFE);
+    assert_eq!(memory.read_byte(0xFFFE), 0x00);
+    assert_eq!(memory.read_byte(0xFFFD), 0x00);
+
+    cpu.regfile.set_zero(true);
+    cpu.pc = 0;
+    
+    cpu.run(&mut memory); // CALL Z, zero is true
+    assert_eq!(cpu.pc, 0xABCD);
+    assert_eq!(cpu.sp, 0xFFFC);
+    assert_eq!(memory.read_byte(0xFFFD), 0x00);
+    assert_eq!(memory.read_byte(0xFFFC), 0x03);
+
+    cpu.run(&mut memory); // RET Z, zero is true
+    assert_eq!(cpu.pc, 0x03);
+    assert_eq!(cpu.sp, 0xFFFE);
 }
+
+

@@ -9,14 +9,16 @@ pub struct CPU {
     regfile: Regfile,
     pc: u16,
     sp: u16,
+    ime: bool,
 }
 
 impl CPU {
     pub fn new() -> CPU {
         let pc: u16 = 0;
         let sp: u16 = 0xFFFE;
+        let ime: bool = false;
         let regfile: Regfile = Regfile::new();
-        CPU {regfile, pc, sp}
+        CPU {regfile, pc, sp, ime}
     }
 
     pub fn run(&mut self, memory: &mut Memory) {
@@ -277,15 +279,7 @@ impl CPU {
                 self.pc_add(1);
              },
              Jump(cond) => {
-                let should_jump = {
-                    match cond {
-                        JumpCond::Zero => self.regfile.get_zero(),
-                        JumpCond::Carry => self.regfile.get_carry(),
-                        JumpCond::NotZero => !self.regfile.get_zero(),
-                        JumpCond::NotCarry => !self.regfile.get_carry(),
-                        JumpCond::Always => true,
-                    }
-                };
+                let should_jump = self.should_jump(cond);
                 self.pc = {
                     match instruction.op {
                         Opcode::JR => self.jump_relative(memory, should_jump),
@@ -300,6 +294,15 @@ impl CPU {
             RST(addr) => {
                 self.pc = addr as u16;
             }
+            Call(cond) => {
+                let should_jump = self.should_jump(cond);
+                self.pc = self.func_call(memory, should_jump);
+            }
+            Return(cond) => {
+                let should_jump = self.should_jump(cond);
+                self.pc = self.func_return(memory, should_jump);
+                if instruction.op == Opcode::RETI { self.ime = true }
+            },
             Unary16(target) => {
                 match instruction.op {
                     Opcode::INC => { self.increment16(target) },
@@ -312,6 +315,9 @@ impl CPU {
                     _ => {}
                 }
                 self.pc_add(1);
+            }
+            Unsupported => {
+                println!("Unsupported instruction: {:02X?}", memory.read_byte(self.pc));
             }
             _ => {
                 println!("Unimplemented instruction: {:02X?}", memory.read_byte(self.pc));
@@ -334,6 +340,36 @@ impl CPU {
         self.sp = self.sp.wrapping_sub(1);
     }
 
+    fn should_jump(&self, cond: JumpCond) -> bool {
+        match cond {
+            JumpCond::Zero => self.regfile.get_zero(),
+            JumpCond::Carry => self.regfile.get_carry(),
+            JumpCond::NotZero => !self.regfile.get_zero(),
+            JumpCond::NotCarry => !self.regfile.get_carry(),
+            JumpCond::Always => true,
+        }
+    }
+
+    fn func_call(&mut self, memory: &mut Memory, should_jump: bool) -> u16 {
+        let next_addr = self.pc.wrapping_add(3);
+        if should_jump {
+            self.stack_push(memory, next_addr);
+            memory.read_next_word(self.pc)
+        }
+        else {
+            next_addr
+        }
+    }
+
+    fn func_return(&mut self, memory: &mut Memory, should_jump: bool) -> u16 {
+        if should_jump {
+            self.stack_pop(memory)
+        }
+        else {
+            self.pc.wrapping_add(1)
+        }
+    }
+
     fn stack_push(&mut self, memory: &mut Memory, val: u16) {
         let most_significant_byte = ((val & 0xFF00) >> 8) as u8;
         let least_significant_byte = (val & 0x00FF) as u8;
@@ -342,8 +378,10 @@ impl CPU {
         //  least_significant_byte);
         self.sp_dec();
         memory.write_byte(self.sp, most_significant_byte);
+        // println!("At addr: {:02X?}", self.sp);
         self.sp_dec();
         memory.write_byte(self.sp, least_significant_byte);
+        // println!("At addr: {:02X?}", self.sp);
     }
 
     fn stack_pop(&mut self, memory: &mut Memory) -> u16 {
