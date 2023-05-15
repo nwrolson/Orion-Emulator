@@ -451,3 +451,13 @@ fn JR_0x30() {
     assert_eq!(cpu.regfile, regfile);
     assert_eq!(cpu.pc, 0x02);
 }
+
+#[test]
+fn CALL_0xCC() {
+    let mut cpu = CPU::new();
+    let mut memory = Memory::new();
+    memory.write_byte(0, 0xCC);
+
+    cpu.run(&mut memory);
+    assert_eq!(1, 0);
+}

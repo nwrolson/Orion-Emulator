@@ -1,3 +1,5 @@
+use std::fmt;
+
 // Following are definitions used for CPU instructions
 
 pub struct Instruction {
@@ -6,7 +8,7 @@ pub struct Instruction {
     pub cycle_len: u8,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum Opcode {
     DAA,
     CCF,
@@ -51,6 +53,7 @@ pub enum Opcode {
     EI,
 }
 
+#[derive(Debug)]
 pub enum InstructionType {
     Misc,
     Arithmetic(ArithmeticArg),
@@ -72,36 +75,50 @@ pub enum InstructionType {
     Bit(Word8, u8)
 }
 
+#[derive(Debug)]
 pub enum ArithmeticArg {
     A, B, C, D, E, H, L, HL, D8, None
 }
 
+#[derive(Debug)]
 pub enum Word8 {
     A, B, C, D, E, H, L, HL
 }
 
+#[derive(Debug)]
 pub enum LoadTarget {
     A, B, C, D, E, H, L, HL, HLI, HLD, BC, DE, A8, A16, CA
 }
 
+#[derive(Debug)]
 pub enum LoadSource {
     A, B, C, D, E, H, L, HL, HLI, HLD, BC, DE, D8, A8, A16, CA
 }
 
+#[derive(Debug)]
 pub enum RegisterPair {
     BC, DE, HL, AF
 }
 
+#[derive(Debug)]
 pub enum Word16 {
     BC, DE, HL, SP
 }
 
+#[derive(Debug)]
 pub enum JumpCond {
     Zero,
     NotZero,
     Carry,
     NotCarry,
     Always,
+}
+
+impl fmt::Display for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Opcode: {:?}\n", self.op);
+        write!(f, "Instruction Type: {:?}", self.instr_type)
+    }
 }
 
 impl Instruction {

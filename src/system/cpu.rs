@@ -313,7 +313,10 @@ impl CPU {
                 }
                 self.pc_add(1);
             }
-            _ => {}
+            _ => {
+                println!("Unimplemented instruction: {:02X?}", memory.read_byte(self.pc));
+                println!("{}", instruction);
+            }
         }
     }
 
