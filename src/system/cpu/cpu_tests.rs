@@ -1,3 +1,5 @@
+use super::{CPU, regfile::Regfile, memory::Memory};
+
 #[cfg(test)]
 mod cpu_tests {
     use crate::system::CPU;
@@ -402,4 +404,50 @@ mod cpu_tests {
         assert_eq!(cpu.regfile, regfile);
         assert_eq!(cpu.sp, 0xFFFE);
     }
+}
+
+#[test]
+fn JP_0xCA() {
+    let mut cpu = CPU::new();
+    let mut memory = Memory::new();
+    let mut regfile = Regfile::new();
+    memory.write_byte(0, 0xCA); // JP Z
+    memory.write_byte(1, 0xAB); // msb of address
+    memory.write_byte(2, 0xCD); // lsb of address
+    // jump to 0xABCD if Zero flag is true
+    // otherwise advance to line 3 of memory
+
+
+
+    cpu.run(&mut memory);
+    assert_eq!(cpu.pc, 3);
+
+    regfile.set_zero(true);
+    cpu.regfile.set_zero(true);
+    cpu.pc = 0;
+    cpu.run(&mut memory);
+
+    assert_eq!(cpu.regfile, regfile);
+    assert_eq!(cpu.pc, 0xABCD);
+}
+
+#[test]
+fn JR_0x30() {
+    let mut cpu = CPU::new();
+    let mut memory = Memory::new();
+    let mut regfile = Regfile::new();
+    memory.write_byte(0, 0x30); // JR NC
+    memory.write_byte(1, 0x05); // two's complement byte to advance PC by
+
+    cpu.run(&mut memory);
+    assert_eq!(cpu.pc, 0x07); // 0x05 + 0x02
+    assert_eq!(cpu.regfile, regfile);
+
+    regfile.set_carry(true);
+    cpu.regfile.set_carry(true);
+    cpu.pc = 0;
+
+    cpu.run(&mut memory);
+    assert_eq!(cpu.regfile, regfile);
+    assert_eq!(cpu.pc, 0x02);
 }

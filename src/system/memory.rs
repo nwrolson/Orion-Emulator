@@ -14,8 +14,8 @@ impl Memory {
     }
 
     pub fn read_next_word(&self, addr: u16) -> u16 {
-        let least_significant_byte = self.memory[addr as usize] as u16;
-        let most_significant_byte = self.memory[addr as usize] as u16;
+        let least_significant_byte = self.memory[(addr+2) as usize] as u16;
+        let most_significant_byte = self.memory[(addr+1) as usize] as u16;
         (most_significant_byte << 8) | least_significant_byte
     }
 

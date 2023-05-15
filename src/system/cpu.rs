@@ -198,7 +198,7 @@ impl CPU {
                             memory.read_byte(addr)
                         }
                         LoadSource::A16 => {
-                            let addr = memory.read_next_word(self.pc+1);
+                            let addr = memory.read_next_word(self.pc);
                             memory.read_byte(addr)
                         }
                         LoadSource::CA => {
@@ -250,7 +250,7 @@ impl CPU {
                         memory.write_byte(addr, source_val);
                     }
                     LoadTarget::A16 => {
-                        let addr = memory.read_next_word(self.pc+1);
+                        let addr = memory.read_next_word(self.pc);
                         self.pc_add(2);
                         memory.write_byte(addr, source_val);
                     }
@@ -276,6 +276,30 @@ impl CPU {
                 }
                 self.pc_add(1);
              },
+             Jump(cond) => {
+                let should_jump = {
+                    match cond {
+                        JumpCond::Zero => self.regfile.get_zero(),
+                        JumpCond::Carry => self.regfile.get_carry(),
+                        JumpCond::NotZero => !self.regfile.get_zero(),
+                        JumpCond::NotCarry => !self.regfile.get_carry(),
+                        JumpCond::Always => true,
+                    }
+                };
+                self.pc = {
+                    match instruction.op {
+                        Opcode::JR => self.jump_relative(memory, should_jump),
+                        Opcode::JP => self.jump(memory, should_jump),
+                        _ => 0
+                    }
+                };
+            }
+            JumpHL => {
+                self.pc = self.regfile.get_hl();
+            }
+            RST(addr) => {
+                self.pc = addr as u16;
+            }
             Unary16(target) => {
                 match instruction.op {
                     Opcode::INC => { self.increment16(target) },
@@ -324,9 +348,28 @@ impl CPU {
         self.sp_inc();
         let most_significant_byte = memory.read_byte(self.sp) as u16;
         self.sp_inc();
-        // println!("popping - msb: {0} lsb: {1}", most_significant_byte,
-        //  least_significant_byte);
         (most_significant_byte << 8) | least_significant_byte
+    }
+
+    fn jump_relative(&self, memory: &mut Memory, should_jump: bool) -> u16 {
+        if should_jump {
+            // converting from two's complement to decimal
+            let val: i16 = memory.read_byte(self.pc.wrapping_add(1)) as i16;
+            let offset : i16 = (-1*(val & 0x80) + (val & 0x7F)) as i16;
+            ((self.pc as i16) + 2 + offset) as u16 // + 2 is to account for instruction length
+        }
+        else {
+            self.pc.wrapping_add(2)
+        }
+    }
+
+    fn jump(&self, memory: &mut Memory, should_jump: bool) -> u16 {
+        if should_jump {
+            memory.read_next_word(self.pc)
+        }
+        else {
+            self.pc.wrapping_add(3)
+        }
     }
 
     fn rotate_left(&mut self, memory: &mut Memory, target: Word8, opcode: Opcode) {
