@@ -26,6 +26,8 @@ impl CPU {
         let (opcode_byte, next_byte) = self.fetch(memory);
         // decode
         let instruction = Instruction::from_byte(opcode_byte, next_byte);
+        // pass instruction cycle count to memory, to update attached components by corresponding timesteps
+        memory.update_cycle(instruction.cycle_len);
         self.execute(instruction, memory);
     }
 
@@ -37,6 +39,7 @@ impl CPU {
         use crate::system::cpu::instruction::InstructionType::*;
         let a16 = memory.read_next_word(self.pc);
         let d8 = memory.read_byte(self.pc+1);
+        let instr_byte = memory.read_byte(self.pc);
         self.pc_add(instruction.instr_len);
         match instruction.instr_type {
             Arithmetic(target) => {
@@ -294,14 +297,18 @@ impl CPU {
             }
             Misc => {
                 match instruction.op {
+                    Opcode::EI => { self.ime = true }
+                    Opcode::DI => { self.ime = false }
+                    Opcode::HALT => {}
+                    Opcode::STOP => {}
                     _ => {}
                 }
             }
             Unsupported => {
-                println!("Unsupported instruction: {:02X?}", memory.read_byte(self.pc));
+                println!("Unsupported instruction: {:02X?}", instr_byte);
             }
             _ => {
-                println!("Unimplemented instruction: {:02X?}", memory.read_byte(self.pc));
+                println!("Unimplemented instruction: {:02X?}", instr_byte);
                 println!("{}", instruction);
             }
         }
@@ -310,7 +317,6 @@ impl CPU {
     // helper functions for instructions
     fn pc_add(&mut self, val: u16) {
         let new_val = self.pc.wrapping_add(val);
-        println!("Old PC: {}, New PC: {}", self.pc, new_val);
         self.pc = new_val;
     }
 
@@ -331,26 +337,6 @@ impl CPU {
             JumpCond::Always => true,
         }
     }
-
-    // fn func_call(&mut self, memory: &mut Memory, should_jump: bool) -> u16 {
-    //     let next_addr = self.pc.wrapping_add(3);
-    //     if should_jump {
-    //         self.stack_push(memory, self.pc);
-    //         memory.read_next_word(self.pc)
-    //     }
-    //     else {
-    //         self.pc
-    //     }
-    // }
-
-    // fn func_return(&mut self, memory: &mut Memory, should_jump: bool) -> u16 {
-    //     if should_jump {
-    //         self.stack_pop(memory)
-    //     }
-    //     else {
-    //         self.pc.wrapping_add(1)
-    //     }
-    // }
 
     fn stack_push(&mut self, memory: &mut Memory, val: u16) {
         let most_significant_byte = ((val & 0xFF00) >> 8) as u8;

@@ -1,10 +1,13 @@
 pub mod cpu;
 pub mod memory;
+pub mod timer;
+pub mod timer_tests;
 
 use crate::system::cpu::CPU;
 use crate::system::memory::Memory;
+use crate::system::timer::Timer;
 
-pub struct System {
+pub struct System{
     /// Structure that encapsulates a system, including state
     /// of any flags, registers, and memory
     memory: Memory,
@@ -19,9 +22,9 @@ pub struct Cartridge {
 }
 
 impl System {
-    pub fn new() -> System {
-        let memory = Memory::new();
+    pub fn new() -> System{
         let cpu = CPU::new();
+        let memory = Memory::new();
         System {memory, cpu}
     }
 }

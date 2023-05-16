@@ -3163,7 +3163,7 @@ impl Instruction {
                 },
              _ => Instruction { 
                     op: Opcode::NULL, 
-                    instr_type: InstructionType::Misc,
+                    instr_type: InstructionType::Unsupported,
                     instr_len: 1,
                     cycle_len: 1 
                 },
