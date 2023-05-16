@@ -23,27 +23,21 @@ impl CPU {
 
     pub fn run(&mut self, memory: &mut Memory) {
         // TODO: IME and interrupt checking
-        let (opcode_byte, prefix) = self.fetch(memory);
+        let (opcode_byte, next_byte) = self.fetch(memory);
         // decode
-        let instruction = if !prefix {
-            Instruction::from_byte(opcode_byte)
-        } else { Instruction::from_byte_prefix(opcode_byte) };
+        let instruction = Instruction::from_byte(opcode_byte, next_byte);
         self.execute(instruction, memory);
     }
 
-    fn fetch(&mut self, memory: &Memory) -> (u8,bool) {
-        let mut byte = memory.read_byte(self.pc);
-        let mut prefix = false;
-        if byte == 0xCB { //prefix instruction
-            self.pc += 1;
-            byte = memory.read_byte(self.pc);
-            prefix = true; 
-        }
-        (byte, prefix)
+    fn fetch(&mut self, memory: &Memory) -> (u8,u8) {
+        (memory.read_byte(self.pc), memory.read_byte(self.pc+1))
     }
 
     fn execute(&mut self, instruction: Instruction, memory: &mut Memory) {
         use crate::system::cpu::instruction::InstructionType::*;
+        let a16 = memory.read_next_word(self.pc);
+        let d8 = memory.read_byte(self.pc+1);
+        self.pc_add(instruction.instr_len);
         match instruction.instr_type {
             Arithmetic(target) => {
                 // get val to use for operation
@@ -60,11 +54,8 @@ impl CPU {
                             let addr = self.regfile.get_hl();
                             memory.read_byte(addr)   
                         }
-                        ArithmeticArg::D8 => {
-                            self.pc_add(1);
-                            memory.read_byte(self.pc)
-                        }
-                        _ => 0,
+                        ArithmeticArg::D8 => d8,
+                        ArithmeticArg::None => 0,
                     }
                 };
                 match instruction.op {
@@ -106,7 +97,6 @@ impl CPU {
                     },
                     _ => {}
                 }
-                self.pc_add(1);
             }
             Rotate(target) => {
                 match instruction.op {
@@ -141,7 +131,6 @@ impl CPU {
                     }
                     _ => {}
                 }
-                self.pc_add(1);
             }
             Bit(target, bit) => {
                 match instruction.op {
@@ -189,19 +178,13 @@ impl CPU {
                             let addr = self.regfile.get_de();
                             memory.read_byte(addr)
                         }
-                        LoadSource::D8 => {
-                            self.pc_add(1);
-                            memory.read_byte(self.pc)
-                        }
+                        LoadSource::D8 => d8,
                         LoadSource::A8 => {
-                            self.pc_add(1);
-                            let addr = (memory.read_byte(self.pc) as u16)
-                                + 0xFF00;
+                            let addr = (d8 as u16) + 0xFF00;
                             memory.read_byte(addr)
                         }
                         LoadSource::A16 => {
-                            let addr = memory.read_next_word(self.pc);
-                            memory.read_byte(addr)
+                            memory.read_byte(16)
                         }
                         LoadSource::CA => {
                             let addr = (self.regfile.r_c as u16) + 0xFF00;
@@ -242,9 +225,7 @@ impl CPU {
                         memory.write_byte(addr, source_val);
                     }
                     LoadTarget::A8 => {
-                        self.pc_add(1);
-                        let addr = (memory.read_byte(self.pc) as u16)
-                            + 0xFF00;
+                        let addr = (d8 as u16) + 0xFF00;
                         memory.write_byte(addr, source_val);
                     }
                     LoadTarget::CA => {
@@ -252,12 +233,9 @@ impl CPU {
                         memory.write_byte(addr, source_val);
                     }
                     LoadTarget::A16 => {
-                        let addr = memory.read_next_word(self.pc);
-                        self.pc_add(2);
-                        memory.write_byte(addr, source_val);
+                        memory.write_byte(a16, source_val);
                     }
                 }
-                self.pc_add(1);
             }
             Push(target) => {
                 match target {
@@ -266,7 +244,6 @@ impl CPU {
                     RegisterPair::HL => self.stack_push(memory, self.regfile.get_hl()),
                     RegisterPair::AF => self.stack_push(memory, self.regfile.get_af()),
                 }
-                self.pc_add(1);
                 },
              Pop(target) => {
                 let val = self.stack_pop(memory);
@@ -276,14 +253,16 @@ impl CPU {
                     RegisterPair::HL => self.regfile.set_hl(val),
                     RegisterPair::AF => self.regfile.set_af(val),
                 }
-                self.pc_add(1);
              },
              Jump(cond) => {
                 let should_jump = self.should_jump(cond);
                 self.pc = {
                     match instruction.op {
-                        Opcode::JR => self.jump_relative(memory, should_jump),
-                        Opcode::JP => self.jump(memory, should_jump),
+                        Opcode::JR => self.jump_relative(memory, d8, should_jump),
+                        Opcode::JP => { 
+                            if should_jump { a16 }
+                            else { self.pc } 
+                        },
                         _ => 0
                     }
                 };
@@ -295,12 +274,15 @@ impl CPU {
                 self.pc = addr as u16;
             }
             Call(cond) => {
-                let should_jump = self.should_jump(cond);
-                self.pc = self.func_call(memory, should_jump);
+                self.pc = if self.should_jump(cond) { 
+                    self.stack_push(memory, self.pc);
+                    a16 
+                }
+                else { self.pc }
             }
             Return(cond) => {
-                let should_jump = self.should_jump(cond);
-                self.pc = self.func_return(memory, should_jump);
+                self.pc = if self.should_jump(cond) { self.stack_pop(memory) }
+                else { self.pc };
                 if instruction.op == Opcode::RETI { self.ime = true }
             },
             Unary16(target) => {
@@ -314,7 +296,6 @@ impl CPU {
                 match instruction.op {
                     _ => {}
                 }
-                self.pc_add(1);
             }
             Unsupported => {
                 println!("Unsupported instruction: {:02X?}", memory.read_byte(self.pc));
@@ -329,6 +310,7 @@ impl CPU {
     // helper functions for instructions
     fn pc_add(&mut self, val: u16) {
         let new_val = self.pc.wrapping_add(val);
+        println!("Old PC: {}, New PC: {}", self.pc, new_val);
         self.pc = new_val;
     }
 
@@ -350,25 +332,25 @@ impl CPU {
         }
     }
 
-    fn func_call(&mut self, memory: &mut Memory, should_jump: bool) -> u16 {
-        let next_addr = self.pc.wrapping_add(3);
-        if should_jump {
-            self.stack_push(memory, next_addr);
-            memory.read_next_word(self.pc)
-        }
-        else {
-            next_addr
-        }
-    }
+    // fn func_call(&mut self, memory: &mut Memory, should_jump: bool) -> u16 {
+    //     let next_addr = self.pc.wrapping_add(3);
+    //     if should_jump {
+    //         self.stack_push(memory, self.pc);
+    //         memory.read_next_word(self.pc)
+    //     }
+    //     else {
+    //         self.pc
+    //     }
+    // }
 
-    fn func_return(&mut self, memory: &mut Memory, should_jump: bool) -> u16 {
-        if should_jump {
-            self.stack_pop(memory)
-        }
-        else {
-            self.pc.wrapping_add(1)
-        }
-    }
+    // fn func_return(&mut self, memory: &mut Memory, should_jump: bool) -> u16 {
+    //     if should_jump {
+    //         self.stack_pop(memory)
+    //     }
+    //     else {
+    //         self.pc.wrapping_add(1)
+    //     }
+    // }
 
     fn stack_push(&mut self, memory: &mut Memory, val: u16) {
         let most_significant_byte = ((val & 0xFF00) >> 8) as u8;
@@ -392,24 +374,15 @@ impl CPU {
         (most_significant_byte << 8) | least_significant_byte
     }
 
-    fn jump_relative(&self, memory: &mut Memory, should_jump: bool) -> u16 {
+    fn jump_relative(&self, memory: &mut Memory, r8: u8, should_jump: bool) -> u16 {
         if should_jump {
             // converting from two's complement to decimal
-            let val: i16 = memory.read_byte(self.pc.wrapping_add(1)) as i16;
+            let val: i16 = r8 as i16;
             let offset : i16 = (-1*(val & 0x80) + (val & 0x7F)) as i16;
-            ((self.pc as i16) + 2 + offset) as u16 // + 2 is to account for instruction length
+            ((self.pc as i16) + offset) as u16
         }
         else {
-            self.pc.wrapping_add(2)
-        }
-    }
-
-    fn jump(&self, memory: &mut Memory, should_jump: bool) -> u16 {
-        if should_jump {
-            memory.read_next_word(self.pc)
-        }
-        else {
-            self.pc.wrapping_add(3)
+            self.pc
         }
     }
 

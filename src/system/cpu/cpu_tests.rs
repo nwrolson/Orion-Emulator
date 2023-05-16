@@ -344,6 +344,7 @@ mod cpu_tests {
         regfile.set_carry(true);
         cpu.run(&mut memory);
         assert_eq!(cpu.regfile, regfile);
+        assert_eq!(cpu.pc, 2);
      }
 
      #[test]
@@ -379,6 +380,7 @@ mod cpu_tests {
         cpu.run(&mut memory);
         assert_eq!(cpu.regfile, regfile);
         assert_eq!(0x40, memory.read_byte(0x07));
+        assert_eq!(cpu.pc, 2);
      }
 
     // Stack Opcodes
