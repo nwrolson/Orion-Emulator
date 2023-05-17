@@ -2,6 +2,9 @@ pub mod regfile;
 pub mod instruction;
 pub mod cpu_tests;
 
+use std::error::Error;
+use std::result::Result;
+
 use crate::system::cpu::regfile::Regfile;
 use crate::system::cpu::instruction::*;
 use crate::system::memory::{Memory, self};
@@ -23,7 +26,7 @@ impl CPU {
         CPU {regfile, pc, sp, ime, scheduled_ime}
     }
 
-    pub fn run(&mut self, memory: &mut Memory) {
+    pub fn run(&mut self, memory: &mut Memory) -> Result<u8, &'static str> {
         let (opcode_byte, next_byte) = self.fetch(memory);
         // decode
         let instruction = Instruction::from_byte(opcode_byte, next_byte);
@@ -32,20 +35,21 @@ impl CPU {
 
         // ime set if scheduled by previous instruction and not reset by latest instruction
         let ime_flag = self.scheduled_ime;
-        self.execute(instruction, memory);
+        let result = self.execute(instruction, memory)?;
         if ime_flag && self.scheduled_ime { self.ime = true }
         // interrupts checked after every instruction
         if self.ime { 
             self.scheduled_ime = false;
             self.check_interrupts(memory); 
         }
+        Ok(result)
     }
 
     fn fetch(&mut self, memory: &Memory) -> (u8,u8) {
         (memory.read_byte(self.pc), memory.read_byte(self.pc+1))
     }
 
-    fn execute(&mut self, instruction: Instruction, memory: &mut Memory) {
+    fn execute(&mut self, instruction: Instruction, memory: &mut Memory) -> Result<u8, &'static str> {
         use crate::system::cpu::instruction::InstructionType::*;
         let a16 = memory.read_next_word(self.pc);
         let d8 = memory.read_byte(self.pc+1);
@@ -250,6 +254,57 @@ impl CPU {
                     }
                 }
             }
+            Load16(target) => {
+                match target {
+                    Word16::BC => self.regfile.set_bc(a16),
+                    Word16::DE => self.regfile.set_de(a16),
+                    Word16::HL => self.regfile.set_hl(a16),
+                    Word16::SP => self.sp = a16,
+                }
+                
+            }
+            LoadMemory16 => {
+                let (msb, lsb) = self.split_u16(self.sp);
+                memory.write_byte(a16, lsb);
+                memory.write_byte(a16.wrapping_add(1), msb);
+            }
+            LoadHL => {
+                let (val, carry) = self.sp.overflowing_add(d8 as u16);
+                self.regfile.set_hl(val);
+                self.regfile.set_carry(carry);
+                let half_carry = (self.sp & 0xFFF) + ((d8 as u16) & 0xFFF) > 0xFFF;
+                self.regfile.set_half_carry(half_carry);
+                self.regfile.set_zero(false);
+                self.regfile.set_sub(false);
+            }
+            Add16(source) => {
+                let val = match source {
+                    Word16::BC => self.regfile.get_bc(),
+                    Word16::DE => self.regfile.get_de(),
+                    Word16::HL => self.regfile.get_hl(),
+                    Word16::SP => self.sp,
+                    
+                };
+                let hl = self.regfile.get_hl();
+                let (new_val, carry) = hl.overflowing_add(val);
+                self.regfile.set_hl(new_val);
+                let half_carry = (val & 0xFFF) + (hl & 0xFFF) > 0xFFF;
+                self.regfile.set_half_carry(half_carry);
+                self.regfile.set_carry(carry);
+                self.regfile.set_sub(false);
+            }
+            AddSP => {
+                let (new_val, carry) = self.sp.overflowing_add(d8 as u16);
+                self.sp = new_val;
+                self.regfile.set_carry(carry);
+                let half_carry = (self.sp & 0xFFF) + ((d8 as u16) & 0xFFF) > 0xFFF;
+                self.regfile.set_half_carry(half_carry);
+                self.regfile.set_zero(false);
+                self.regfile.set_sub(false);
+            },
+            LoadSP => {
+                self.sp = self.regfile.get_hl()
+            }
             Push(target) => {
                 match target {
                     RegisterPair::BC => self.stack_push(memory, self.regfile.get_bc()),
@@ -319,12 +374,15 @@ impl CPU {
             }
             Unsupported => {
                 println!("Unsupported instruction: {:02X?}", instr_byte);
+                return Err("Unsupported instruction");
             }
             _ => {
                 println!("Unimplemented instruction: {:02X?}", instr_byte);
                 println!("{}", instruction);
+                return Err("Unimplemented instruction");
             }
         }
+        Ok(instr_byte)
     }
 
     fn check_interrupts(&mut self, memory: &mut Memory) {
@@ -368,6 +426,12 @@ impl CPU {
         self.sp = self.sp.wrapping_sub(1);
     }
 
+    fn split_u16(&self, val: u16) -> (u8, u8) {
+        let most_significant_byte = ((val & 0xFF00) >> 8) as u8;
+        let least_significant_byte = (val & 0x00FF) as u8;
+        (most_significant_byte, least_significant_byte)
+    }
+
     fn should_jump(&self, cond: JumpCond) -> bool {
         match cond {
             JumpCond::Zero => self.regfile.get_zero(),
@@ -379,8 +443,7 @@ impl CPU {
     }
 
     fn stack_push(&mut self, memory: &mut Memory, val: u16) {
-        let most_significant_byte = ((val & 0xFF00) >> 8) as u8;
-        let least_significant_byte = (val & 0x00FF) as u8;
+        let (most_significant_byte, least_significant_byte) = self.split_u16(val);
         // write MSB first
         // println!("pushing - msb: {:02X?} lsb: {:02X?}", most_significant_byte,
         //  least_significant_byte);

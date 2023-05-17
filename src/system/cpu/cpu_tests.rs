@@ -6,6 +6,25 @@ mod cpu_tests {
     use crate::system::Memory;
     use crate::system::cpu::regfile::Regfile;
 
+    #[test]
+    fn check_opcodes() {
+        // verify that all expected opcodes are handled by CPU
+        let mut cpu = CPU::new();
+        let mut memory = Memory::new();
+        // opcodes not in CPU spec
+        let undefined_opcodes: [u8; 11] = [0xD3, 0xDB, 0xDD, 0xE3, 0xE4, 0xEB, 0xEC, 0xED, 0xF4, 0xFC, 0xFD];
+
+        for byte in 0..=0xFF {
+            if !undefined_opcodes.contains(&byte) {
+                cpu.pc = 0;
+                memory.write_byte(0, byte);
+                let result = cpu.run(&mut memory);
+                assert_eq!(result, Ok(byte));
+            }
+        }
+    }
+
+
     // INS TARGET
     // Instruction Length in Bytes, Cycle Amount
     // Z N H C flag registers
