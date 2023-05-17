@@ -10,27 +10,35 @@ pub struct CPU {
     pc: u16,
     sp: u16,
     ime: bool, // Interrupt Master Enable Flag
+    scheduled_ime: bool // IME takes one instruction to switch to true
 }
 
 impl CPU {
     pub fn new() -> CPU {
+        let regfile: Regfile = Regfile::new();
         let pc: u16 = 0;
         let sp: u16 = 0xFFFE;
         let ime: bool = true;
-        let regfile: Regfile = Regfile::new();
-        CPU {regfile, pc, sp, ime}
+        let scheduled_ime = false;
+        CPU {regfile, pc, sp, ime, scheduled_ime}
     }
 
     pub fn run(&mut self, memory: &mut Memory) {
-        // TODO: IME and interrupt checking
         let (opcode_byte, next_byte) = self.fetch(memory);
         // decode
         let instruction = Instruction::from_byte(opcode_byte, next_byte);
         // pass instruction cycle count to memory, to update attached components by corresponding timesteps
         memory.update_cycle(instruction.cycle_len);
+
+        // ime set if scheduled by previous instruction and not reset by latest instruction
+        let ime_flag = self.scheduled_ime;
         self.execute(instruction, memory);
+        if ime_flag && self.scheduled_ime { self.ime = true }
         // interrupts checked after every instruction
-        if self.ime { self.check_interrupts(memory) }
+        if self.ime { 
+            self.scheduled_ime = false;
+            self.check_interrupts(memory); 
+        }
     }
 
     fn fetch(&mut self, memory: &Memory) -> (u8,u8) {
@@ -288,7 +296,7 @@ impl CPU {
             Return(cond) => {
                 self.pc = if self.should_jump(cond) { self.stack_pop(memory) }
                 else { self.pc };
-                if instruction.op == Opcode::RETI { self.ime = true }
+                if instruction.op == Opcode::RETI { self.scheduled_ime = true }
             },
             Unary16(target) => {
                 match instruction.op {
@@ -299,8 +307,11 @@ impl CPU {
             }
             Misc => {
                 match instruction.op {
-                    Opcode::EI => { self.ime = true }
-                    Opcode::DI => { self.ime = false }
+                    Opcode::EI => { self.scheduled_ime = true }
+                    Opcode::DI => { 
+                        self.ime = false;
+                        self.scheduled_ime = false;
+                     }
                     Opcode::HALT => {}
                     Opcode::STOP => {}
                     _ => {}

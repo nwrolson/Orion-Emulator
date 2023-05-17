@@ -485,4 +485,36 @@ fn CALL_RETURN_0xCC_0xC8() {
     assert_eq!(cpu.sp, 0xFFFE);
 }
 
+#[test]
+fn EI_DI_0xFB_0xF4() {
+    let mut cpu = CPU::new();
+    let mut memory = Memory::new();
+    memory.write_byte(0, 0xF3); // DI
+    memory.write_byte(1, 0xFB); // EI
+    memory.write_byte(2, 0x00); // just showing there's a NOP here
+    memory.write_byte(3, 0xF3);
+    memory.write_byte(4, 0xFB);
+    memory.write_byte(5, 0xF3);
+
+    cpu.run(&mut memory); // DI
+    assert_eq!(cpu.ime, false);
+
+    // EI doesn't take effect until after next instruction
+    cpu.run(&mut memory); // EI
+    assert_eq!(cpu.ime, false);
+    cpu.run(&mut memory); // NOP
+    assert_eq!(cpu.ime, true);
+
+    // if EI is executed, then immediately followed with a DI,
+    // then ime is never set to true
+    cpu.run(&mut memory); // DI
+    assert_eq!(cpu.ime, false);
+    cpu.run(&mut memory); // EI
+    assert_eq!(cpu.ime, false);
+    cpu.run(&mut memory); // DI
+    assert_eq!(cpu.ime, false);
+
+    
+}
+
 
