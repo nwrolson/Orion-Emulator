@@ -9,14 +9,14 @@ pub struct CPU {
     regfile: Regfile,
     pc: u16,
     sp: u16,
-    ime: bool,
+    ime: bool, // Interrupt Master Enable Flag
 }
 
 impl CPU {
     pub fn new() -> CPU {
         let pc: u16 = 0;
         let sp: u16 = 0xFFFE;
-        let ime: bool = false;
+        let ime: bool = true;
         let regfile: Regfile = Regfile::new();
         CPU {regfile, pc, sp, ime}
     }
@@ -29,6 +29,8 @@ impl CPU {
         // pass instruction cycle count to memory, to update attached components by corresponding timesteps
         memory.update_cycle(instruction.cycle_len);
         self.execute(instruction, memory);
+        // interrupts checked after every instruction
+        if self.ime { self.check_interrupts(memory) }
     }
 
     fn fetch(&mut self, memory: &Memory) -> (u8,u8) {
@@ -314,11 +316,38 @@ impl CPU {
         }
     }
 
+    fn check_interrupts(&mut self, memory: &mut Memory) {
+        let interrupts = memory.get_interrupts();
+        memory.clear_interrupts();
+        if interrupts.vblank {
+            self.stack_push(memory, self.pc);
+            self.pc = 0x0040;
+        }
+        else if interrupts.lcd {
+            self.stack_push(memory, self.pc);
+            self.pc = 0x0048;
+        }
+        else if interrupts.timer {
+            self.stack_push(memory, self.pc);
+            self.pc = 0x0050;
+        }
+        else if interrupts.serial {
+            self.stack_push(memory, self.pc);
+            self.pc = 0x0058;
+        }
+        else if interrupts.joypad {
+            self.stack_push(memory, self.pc);
+            self.pc = 0x0060;
+        }
+    }
+
     // helper functions for instructions
     fn pc_add(&mut self, val: u16) {
         let new_val = self.pc.wrapping_add(val);
         self.pc = new_val;
     }
+
+    pub fn get_pc(&self) -> u16 { self.pc }
 
     fn sp_inc(&mut self) {
         self.sp = self.sp.wrapping_add(1);

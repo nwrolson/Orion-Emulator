@@ -1,15 +1,23 @@
 use crate::system::*;
 
 pub struct Memory {
-    memory: [u8; 0xFFFF],
+    memory: [u8; 0x10000],
     // devices mapped to memory addresses
     pub timer: Timer
+}
+
+pub struct Interrupts {
+    pub vblank: bool,
+    pub lcd: bool,
+    pub timer: bool,
+    pub serial: bool,
+    pub joypad: bool,
 }
 
 impl Memory {
     pub fn new() -> Memory {
         Memory {
-            memory: [0 as u8; 0xFFFF],
+            memory: [0 as u8; 0x10000],
             timer: Timer::new()
         }
     }
@@ -46,7 +54,34 @@ impl Memory {
         }
     }
 
+    pub fn get_interrupts(&self) -> Interrupts {
+        // 0xFFFF - Interrupt Enable
+        // 0xFF0F - Interrupt Flags
+        // Flags in 0xFF0F:
+        // Bit 0 - VBlank
+        // Bit 1 - LCD STAT
+        // Bit 2 - Timer
+        // Bit 3 - Serial
+        // Bit 4 - Joypad
+        let enable = self.memory[0xFFFF];
+        let flags = self.memory[0xFF0F];
+        let vblank = ((enable & 0x1) & (flags & 0x1)) > 0;
+        let lcd = ((enable & 0x2) & (flags & 0x2)) > 0;
+        let timer = ((enable & 0x4) & (flags & 0x4)) > 0;
+        let serial = ((enable & 0x8) & (flags & 0x8)) > 0;
+        let joypad = ((enable & 0x10) & (flags & 0x10)) > 0;
+        Interrupts {
+            vblank, lcd, timer, serial, joypad
+        }
+
+    }
+
+    pub fn clear_interrupts(&mut self) {
+        self.memory[0xFF0F] = 0;
+    }
+
     pub fn update_cycle(&mut self, cycles: u8) {
-        self.timer.update_timestep(cycles);
+        let timer = self.timer.update_timestep(cycles);
+        if timer { self.memory[0xFF0F] |= 0x04 }
     }
 }
